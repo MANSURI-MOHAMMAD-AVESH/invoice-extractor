@@ -1,39 +1,69 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
-from PIL import Image
 import pytesseract
+from PIL import Image
 import shutil
-import re
+import os
 
 app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
-def read_root():
+async def read_root():
     return """
-    <h1>Invoice Extractor API</h1>
-    <p>Go to <a href='/docs'>/docs</a> to use the API</p>
+    <html>
+        <head>
+            <title>Luxury Invoice Extractor</title>
+            <style>
+                body { background-color: #f5f5f5; font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                h1 { color: #333; font-size: 2.5em; margin-bottom: 20px; }
+                form { background: white; padding: 40px; border-radius: 15px; display: inline-block; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+                input[type=file] { margin: 20px 0; }
+                input[type=submit] { background: #000; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1em; cursor: pointer; }
+                input[type=submit]:hover { background: #444; }
+                pre { background: #eee; padding: 20px; border-radius: 10px; text-align: left; }
+            </style>
+        </head>
+        <body>
+            <h1>Luxury Invoice Extractor</h1>
+            <form action="/extract" enctype="multipart/form-data" method="post">
+                <input type="file" name="file" accept="image/*" required>
+                <br>
+                <input type="submit" value="Extract Invoice">
+            </form>
+        </body>
+    </html>
     """
 
-def extract_invoice_fields(text):
-    invoice_number = re.search(r'Invoice Number[: ]+(\d+)', text)
-    date = re.search(r'Date[: ]+([0-9/-]+)', text)
-    total = re.search(r'Total[: ]+\$?([0-9,.]+)', text)
-    vendor = re.search(r'From[: ]+(.*)', text)
-
-    return {
-        "invoice_number": invoice_number.group(1) if invoice_number else None,
-        "date": date.group(1) if date else None,
-        "total": total.group(1) if total else None,
-        "vendor": vendor.group(1) if vendor else None
-    }
-
-@app.post("/extract")
+@app.post("/extract", response_class=HTMLResponse)
 async def extract(file: UploadFile = File(...)):
-    with open("temp.jpg", "wb") as buffer:
+    # save uploaded file temporarily
+    temp_file = "temp.jpg"
+    with open(temp_file, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
-    img = Image.open("temp.jpg")
-    text = pytesseract.image_to_string(img)
-    data = extract_invoice_fields(text)
-    
-    return data
+
+    # OCR
+    text = pytesseract.image_to_string(Image.open(temp_file))
+
+    # delete temp file
+    os.remove(temp_file)
+
+    # return result in HTML
+    return f"""
+    <html>
+        <head>
+            <title>Extracted Invoice</title>
+            <style>
+                body {{ background-color: #f5f5f5; font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                h1 {{ color: #333; font-size: 2.5em; margin-bottom: 20px; }}
+                pre {{ background: #eee; padding: 20px; border-radius: 10px; text-align: left; max-width: 800px; margin: auto; white-space: pre-wrap; word-wrap: break-word; }}
+                a {{ display: inline-block; margin-top: 20px; text-decoration: none; color: #000; background: #ddd; padding: 10px 20px; border-radius: 8px; }}
+                a:hover {{ background: #ccc; }}
+            </style>
+        </head>
+        <body>
+            <h1>Extracted Invoice</h1>
+            <pre>{text}</pre>
+            <a href="/">Upload Another Invoice</a>
+        </body>
+    </html>
+    """
