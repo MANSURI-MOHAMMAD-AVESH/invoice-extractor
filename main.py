@@ -1,10 +1,18 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import HTMLResponse
 from PIL import Image
 import pytesseract
 import shutil
 import re
 
 app = FastAPI()
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return """
+    <h1>Invoice Extractor API</h1>
+    <p>Go to <a href='/docs'>/docs</a> to use the API</p>
+    """
 
 def extract_invoice_fields(text):
     invoice_number = re.search(r'Invoice Number[: ]+(\d+)', text)
